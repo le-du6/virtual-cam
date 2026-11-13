@@ -1,0 +1,6 @@
+build/
+*.xcodeproj/
+Config/
+_to_delete/
+.DS_Store
+xcuserdata/
