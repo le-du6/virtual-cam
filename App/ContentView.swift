@@ -39,6 +39,16 @@ struct ContentView: View {
                 if let message = pipeline.message {
                     Text(message).font(.callout).foregroundStyle(.secondary)
                 }
+                HStack {
+                    Button("Effets vidéo macOS…", action: pipeline.showVideoEffects)
+                    Spacer()
+                    if pipeline.portraitActive {
+                        Label("Portrait actif", systemImage: "person.crop.rectangle")
+                            .font(.callout).foregroundStyle(.secondary)
+                    }
+                }
+                Text("Portrait, Studio Light… : à activer pour MaCam (effet appliqué avant les bandeaux) et à laisser désactivés dans Teams pour la caméra MaCam, sinon les bandeaux seront floutés.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
 
             Section("Bandeaux") {
@@ -57,8 +67,13 @@ struct ContentView: View {
                 HStack {
                     Button("Gérer les bandeaux…") { app.showWindow(MaCamApp.overlaysWindowID, using: openWindow) }
                     Spacer()
+                    Button(overlays.rotationRunning ? "Arrêter la rotation" : "Lancer la rotation") {
+                        overlays.toggleRotation()
+                    }
+                    .disabled(!overlays.rotationRunning && overlays.rotationItems.isEmpty)
+                    .help("⌃⌥R — bandeaux cochés « Inclure dans la rotation »")
                     Button("Tout masquer") { overlays.hideAll() }
-                        .disabled(overlays.visible.isEmpty)
+                        .disabled(overlays.visible.isEmpty && !overlays.rotationRunning)
                 }
             }
 
@@ -77,10 +92,10 @@ struct ContentView: View {
                     .foregroundStyle(.secondary)
             }
 
-            Section("Aperçu (sortie réelle de la caméra virtuelle)") {
+            Section("Aperçu (image envoyée à la caméra virtuelle)") {
                 Toggle("Afficher l'aperçu", isOn: $pipeline.previewEnabled)
                 if pipeline.previewEnabled {
-                    PreviewView(session: pipeline.previewSession)
+                    PreviewView(previewLayer: pipeline.previewLayer)
                         .aspectRatio(16.0 / 9.0, contentMode: .fit)
                 }
             }
@@ -90,16 +105,13 @@ struct ContentView: View {
     }
 }
 
-/// Affiche une AVCaptureSession (ici : la caméra virtuelle elle-même).
+/// Affiche le calque d'aperçu alimenté par le compositeur.
 struct PreviewView: NSViewRepresentable {
-    let session: AVCaptureSession
+    let previewLayer: CALayer
 
     func makeNSView(context: Context) -> NSView {
         let view = NSView()
-        let layer = AVCaptureVideoPreviewLayer(session: session)
-        layer.videoGravity = .resizeAspect
-        layer.backgroundColor = NSColor.black.cgColor
-        view.layer = layer
+        view.layer = previewLayer       // vue « layer-hosting »
         view.wantsLayer = true
         return view
     }

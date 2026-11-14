@@ -60,35 +60,76 @@ struct OverlayItem: Codable, Identifiable, Equatable {
     var url: String = ""
     /// Carte : complément affiché après l'URL (ex. « § 4 »).
     var urlNote: String = ""
+    /// Logo : nom d'un fichier du dossier Logos, ou URL (téléchargée puis mise en cache).
+    var logo: String = ""
+    /// Logo recoloré en blanc pour les fonds sombres (logo à fond transparent requis).
+    var logoWhite: Bool = true
+    /// Fait partie de la rotation automatique.
+    var inRotation: Bool = false
+}
+
+/// Décodage tolérant : les bandeaux enregistrés par une version précédente restent lisibles.
+extension OverlayItem {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        label = try c.decode(String.self, forKey: .label)
+        style = try c.decode(OverlayStyle.self, forKey: .style)
+        position = try c.decode(OverlayPosition.self, forKey: .position)
+        animation = try c.decode(OverlayAnimation.self, forKey: .animation)
+        autoHide = try c.decode(Double.self, forKey: .autoHide)
+        title = try c.decode(String.self, forKey: .title)
+        subtitle = try c.decode(String.self, forKey: .subtitle)
+        icon = try c.decodeIfPresent(String.self, forKey: .icon) ?? ""
+        url = try c.decodeIfPresent(String.self, forKey: .url) ?? ""
+        urlNote = try c.decodeIfPresent(String.self, forKey: .urlNote) ?? ""
+        logo = try c.decodeIfPresent(String.self, forKey: .logo) ?? ""
+        logoWhite = try c.decodeIfPresent(Bool.self, forKey: .logoWhite) ?? (style != .carte)
+        inRotation = try c.decodeIfPresent(Bool.self, forKey: .inRotation) ?? false
+    }
+}
+
+/// Réglages de la rotation automatique.
+struct RotationSettings: Codable, Equatable {
+    /// Durée d'affichage des bandeaux sans masquage automatique (s).
+    var duration: Double = 12
+    /// Pause entre deux bandeaux (s).
+    var pause: Double = 2
+    var loop: Bool = true
 }
 
 extension OverlayItem {
     static let me = "Benoit LEGER-DERVILLE"
+    static let stelauLogo = "https://www.stelau.com/brand/logo.stelau.png"
 
     /// Jeu de départ (modifiable dans la fenêtre Bandeaux).
     static let defaults: [OverlayItem] = [
         OverlayItem(label: "Stelau · iDAKTO", style: .sobre, position: .bottomLeft, animation: .deroule,
-                    autoHide: 8, title: me, subtitle: "Expert Cyber · Stelau · iDAKTO"),
+                    autoHide: 8, title: me, subtitle: "Expert Cyber · Stelau · iDAKTO",
+                    logo: stelauLogo, inRotation: true),
         OverlayItem(label: "LSTI", style: .marque, position: .bottomLeft, animation: .deroule,
                     autoHide: 8, title: me, subtitle: "Auditeur eIDAS · LSTI"),
         OverlayItem(label: "EPITA", style: .marque, position: .bottomLeft, animation: .deroule,
-                    autoHide: 8, title: me, subtitle: "Enseignant Cours de Cryptographie · EPITA · Stelau"),
+                    autoHide: 8, title: me, subtitle: "Enseignant Cours de Cryptographie · EPITA · Stelau",
+                    logo: stelauLogo),
         OverlayItem(label: "Cours : ouverture", style: .carte, position: .bottomCenter, animation: .glissement,
                     autoHide: 20, title: "Introduction à la Cryptographie Moderne",
                     subtitle: "Les supports du cours, à suivre en direct",
-                    icon: "graduationcap.fill", url: "https://cours.stelau.com/cours.html#/ouverture"),
+                    icon: "graduationcap.fill", url: "https://cours.stelau.com/cours.html#/ouverture",
+                    logoWhite: false),
         OverlayItem(label: "Atelier crypto", style: .carte, position: .bottomCenter, animation: .glissement,
                     autoHide: 20, title: "L'Atelier crypto",
                     subtitle: "Les primitives cryptographiques, à manipuler en ligne",
-                    icon: "flask.fill", url: "https://crypto.stelau.com/"),
+                    icon: "flask.fill", url: "https://crypto.stelau.com/", logoWhite: false, inRotation: true),
         OverlayItem(label: "Formation cryptographie", style: .carte, position: .bottomCenter, animation: .glissement,
                     autoHide: 20, title: "Formation Cryptographie moderne",
                     subtitle: "Programme, modalités et inscription",
-                    icon: "key.fill", url: "https://www.stelau.com/formations/cryptographie-moderne/"),
+                    icon: "key.fill", url: "https://www.stelau.com/formations/cryptographie-moderne/",
+                    logoWhite: false, inRotation: true),
         OverlayItem(label: "Stelau", style: .carte, position: .bottomCenter, animation: .glissement,
                     autoHide: 20, title: "Stelau",
                     subtitle: "Conseil en cybersécurité et identité numérique",
-                    icon: "shield.lefthalf.filled", url: "https://www.stelau.com/"),
+                    icon: "shield.lefthalf.filled", url: "https://www.stelau.com/", logoWhite: false),
     ]
 
     /// Modèle vierge pour le bouton « + ».
@@ -96,7 +137,7 @@ extension OverlayItem {
         style == .carte
             ? OverlayItem(label: "Nouvelle carte", style: .carte, position: .bottomCenter, animation: .glissement,
                           autoHide: 20, title: "Titre", subtitle: "Description",
-                          icon: "link", url: "https://www.stelau.com/")
+                          icon: "link", url: "https://www.stelau.com/", logoWhite: false)
             : OverlayItem(label: "Nouveau bandeau", style: style, position: .bottomLeft, animation: .deroule,
                           autoHide: 8, title: me, subtitle: "Fonction")
     }

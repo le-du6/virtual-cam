@@ -38,7 +38,12 @@ enum OverlayRenderer {
         let name = TextLine(item.title, font: uiFont(.emphasizedSystem, 38), color: Palette.white)
         let title = TextLine(item.subtitle, font: uiFont(.system, 24), color: CGColor(gray: 0.82, alpha: 1))
         let accent: CGFloat = 8, padding: CGFloat = 26
-        let size = CGSize(width: ceil(accent + padding * 2 + max(name.width, title.width)), height: 112)
+        let textWidth = max(name.width, title.width)
+        // Logo à droite, séparé du texte par un filet vertical
+        let logo = Logos.image(item.logo, height: 56, white: item.logoWhite)
+        let logoGap: CGFloat = 26, ruleGap: CGFloat = 22
+        let logoBlock = logo.map { logoGap + 1 + ruleGap + CGFloat($0.width) } ?? 0
+        let size = CGSize(width: ceil(accent + padding * 2 + textWidth + logoBlock), height: 112)
 
         return OverlayLayers(
             size: size,
@@ -53,6 +58,13 @@ enum OverlayRenderer {
             content: layer(size) { ctx in
                 name.draw(ctx, x: accent + padding, baseline: 58)
                 title.draw(ctx, x: accent + padding, baseline: 24)
+                if let logo {
+                    let ruleX = accent + padding + textWidth + logoGap
+                    ctx.setFillColor(CGColor(gray: 1, alpha: 0.25))
+                    ctx.fill(CGRect(x: ruleX, y: 24, width: 1, height: size.height - 48))
+                    ctx.draw(logo, in: CGRect(x: ruleX + 1 + ruleGap, y: (size.height - CGFloat(logo.height)) / 2,
+                                              width: CGFloat(logo.width), height: CGFloat(logo.height)))
+                }
             })
     }
 
@@ -64,7 +76,10 @@ enum OverlayRenderer {
 
         let accentW: CGFloat = 10, namePad: CGFloat = 24, titlePad: CGFloat = 18
         let titleBox = CGRect(x: 26, y: 0, width: ceil(title.width + titlePad * 2), height: 44)
-        let nameBox = CGRect(x: 0, y: titleBox.maxY, width: ceil(accentW + namePad * 2 + name.width), height: 70)
+        let logo = Logos.image(item.logo, height: 40, white: item.logoWhite)
+        let logoGap: CGFloat = 26
+        let logoBlock = logo.map { logoGap + CGFloat($0.width) } ?? 0
+        let nameBox = CGRect(x: 0, y: titleBox.maxY, width: ceil(accentW + namePad * 2 + name.width + logoBlock), height: 70)
         let size = CGSize(width: max(nameBox.maxX, titleBox.maxX), height: nameBox.maxY)
 
         return OverlayLayers(
@@ -81,6 +96,11 @@ enum OverlayRenderer {
             },
             content: layer(size) { ctx in
                 name.draw(ctx, x: accentW + namePad, baseline: name.baseline(centeredIn: nameBox))
+                if let logo {
+                    ctx.draw(logo, in: CGRect(x: accentW + namePad + name.width + logoGap,
+                                              y: nameBox.midY - CGFloat(logo.height) / 2,
+                                              width: CGFloat(logo.width), height: CGFloat(logo.height)))
+                }
                 title.draw(ctx, x: titleBox.minX + titlePad, baseline: title.baseline(centeredIn: titleBox))
             })
     }
@@ -88,6 +108,7 @@ enum OverlayRenderer {
     // MARK: - Carte QR code (inspirée des encarts reveal.js)
 
     private static func carte(_ item: OverlayItem) -> OverlayLayers {
+        if item.position.isTop { return carteVerticale(item) }
         let pad: CGFloat = 22, qrSide: CGFloat = 156, gap: CGFloat = 26, rightPad: CGFloat = 32
         let iconSide: CGFloat = 34, iconGap: CGFloat = 12, border: CGFloat = 3, radius: CGFloat = 18
 
@@ -96,8 +117,12 @@ enum OverlayRenderer {
         let urlLine = TextLine(urlAttributed(item))
         let icon = Icons.image(item.icon, side: iconSide * 2, color: NSColor(cgColor: Palette.cardBlue)!)
 
+        let logo = Logos.image(item.logo, height: 30, white: item.logoWhite)
+        let logoGap: CGFloat = 28
+
         let titleIndent = icon == nil ? 0 : iconSide + iconGap
-        let textWidth = max(titleIndent + titleLine.width, subtitleLine.width, urlLine.width)
+        let titleRowWidth = titleIndent + titleLine.width + (logo.map { logoGap + CGFloat($0.width) } ?? 0)
+        let textWidth = max(titleRowWidth, subtitleLine.width, urlLine.width)
         let size = CGSize(width: ceil(pad + qrSide + gap + textWidth + rightPad), height: qrSide + pad * 2)
 
         // Bloc de texte (3 lignes) centré verticalement
@@ -140,14 +165,82 @@ enum OverlayRenderer {
                     ctx.draw(icon, in: CGRect(x: textX + (iconSide - w) / 2, y: titleRow.midY - h / 2, width: w, height: h))
                 }
                 titleLine.draw(ctx, x: textX + titleIndent, baseline: titleLine.baseline(centeredIn: titleRow))
+                if let logo {   // logo aligné à droite, sur la ligne du titre
+                    ctx.draw(logo, in: CGRect(x: size.width - rightPad - CGFloat(logo.width),
+                                              y: titleRow.midY - CGFloat(logo.height) / 2,
+                                              width: CGFloat(logo.width), height: CGFloat(logo.height)))
+                }
                 subtitleLine.draw(ctx, x: textX, baseline: subtitleLine.baseline(centeredIn: subtitleRow))
                 urlLine.draw(ctx, x: textX, baseline: urlLine.baseline(centeredIn: urlRow))
             })
     }
 
+    // MARK: - Carte QR code verticale (positions du haut)
+
+    private static func carteVerticale(_ item: OverlayItem) -> OverlayLayers {
+        let width: CGFloat = 300, pad: CGFloat = 22, border: CGFloat = 3, radius: CGFloat = 18
+        let inner = width - pad * 2
+        let iconSide: CGFloat = 32, iconGap: CGFloat = 12, qrMax: CGFloat = 210
+
+        let icon = Icons.image(item.icon, side: iconSide * 2, color: NSColor(cgColor: Palette.cardBlue)!)
+        let logo = Logos.image(item.logo, height: 26, white: item.logoWhite)
+
+        // Ligne de tête : icône puis titre (sur plusieurs lignes si besoin), à sa droite
+        let titleIndent = icon == nil ? 0 : iconSide + iconGap
+        let title = TextBlock(attributed(item.title, NSFont.systemFont(ofSize: 25, weight: .bold) as CTFont,
+                                         Palette.cardBlue), width: inner - titleIndent)
+        let headRow = max(title.height, icon == nil ? 0 : iconSide)
+        let subtitle = TextBlock(attributed(item.subtitle, NSFont.systemFont(ofSize: 17) as CTFont,
+                                            Palette.cardMuted), width: inner)
+        let url = TextBlock(urlAttributed(item, size: 15, wrap: true), width: inner)
+        let qr = qrCode(item.url)
+        let qrSide = qr.map { floor(qrMax / CGFloat($0.width)) * CGFloat($0.width) } ?? 0
+        let logoRow = logo.map { CGFloat($0.height) } ?? 0
+
+        // Empilement de haut en bas
+        let gaps: (head: CGFloat, subtitle: CGFloat, qr: CGFloat, logo: CGFloat) = (8, 16, 14, logo == nil ? 0 : 14)
+        let height = ceil(pad + headRow + gaps.head + subtitle.height + gaps.subtitle + qrSide + gaps.qr
+                          + url.height + gaps.logo + logoRow + pad)
+        let size = CGSize(width: width, height: height)
+
+        return OverlayLayers(
+            size: size,
+            background: layer(size) { ctx in
+                let card = CGRect(origin: .zero, size: size).insetBy(dx: border / 2, dy: border / 2)
+                let path = CGPath(roundedRect: card, cornerWidth: radius, cornerHeight: radius, transform: nil)
+                ctx.addPath(path); ctx.setFillColor(Palette.white); ctx.fillPath()
+                ctx.addPath(path); ctx.setStrokeColor(Palette.cardBlue); ctx.setLineWidth(border); ctx.strokePath()
+            },
+            accent: nil,
+            content: layer(size) { ctx in
+                var y = height - pad                       // bord supérieur de l'élément suivant
+                if let icon {                              // icône calée sur la première ligne du titre
+                    let ratio = CGFloat(icon.width) / CGFloat(icon.height)
+                    let w = ratio >= 1 ? iconSide : iconSide * ratio
+                    let h = ratio >= 1 ? iconSide / ratio : iconSide
+                    let firstLineMid = y - min(title.height, 34) / 2
+                    ctx.draw(icon, in: CGRect(x: pad + (iconSide - w) / 2, y: firstLineMid - h / 2, width: w, height: h))
+                }
+                title.draw(ctx, x: pad + titleIndent, top: y)
+                y -= headRow + gaps.head
+                subtitle.draw(ctx, x: pad, top: y); y -= subtitle.height + gaps.subtitle
+                if let qr {
+                    ctx.interpolationQuality = .none
+                    ctx.draw(qr, in: CGRect(x: (width - qrSide) / 2, y: y - qrSide, width: qrSide, height: qrSide))
+                    ctx.interpolationQuality = .high
+                }
+                y -= qrSide + gaps.qr
+                url.draw(ctx, x: pad, top: y); y -= url.height + gaps.logo
+                if let logo {                              // logo en pied de carte, à droite
+                    ctx.draw(logo, in: CGRect(x: width - pad - CGFloat(logo.width), y: y - CGFloat(logo.height),
+                                              width: CGFloat(logo.width), height: CGFloat(logo.height)))
+                }
+            })
+    }
+
     /// « crypto.stelau.com/#/algo/hmac · § 4 » : domaine en sombre, chemin en bleu.
-    private static func urlAttributed(_ item: OverlayItem) -> NSAttributedString {
-        let mono = NSFont.monospacedSystemFont(ofSize: 21, weight: .regular) as CTFont
+    private static func urlAttributed(_ item: OverlayItem, size: CGFloat = 21, wrap: Bool = false) -> NSAttributedString {
+        let mono = NSFont.monospacedSystemFont(ofSize: size, weight: .regular) as CTFont
         var display = item.url
         for prefix in ["https://", "http://"] where display.hasPrefix(prefix) { display.removeFirst(prefix.count) }
         if display.hasSuffix("/"), display.filter({ $0 == "/" }).count == 1 { display.removeLast() }
@@ -156,6 +249,11 @@ enum OverlayRenderer {
         let result = NSMutableAttributedString(attributedString: attributed(String(display[..<slash]), mono, Palette.cardText))
         result.append(attributed(String(display[slash...]), mono, Palette.cardBlue))
         if !item.urlNote.isEmpty { result.append(attributed("  ·  " + item.urlNote, mono, Palette.cardText)) }
+        if wrap {   // carte verticale : coupure au caractère, l'URL n'a pas d'espaces
+            let paragraph = NSMutableParagraphStyle()
+            paragraph.lineBreakMode = .byCharWrapping
+            result.addAttribute(.paragraphStyle, value: paragraph, range: NSRange(location: 0, length: result.length))
+        }
         return result
     }
 
@@ -202,6 +300,30 @@ private func attributed(_ text: String, _ font: CTFont, _ color: CGColor) -> NSA
         NSAttributedString.Key(kCTFontAttributeName as String): font,
         NSAttributedString.Key(kCTForegroundColorAttributeName as String): color,
     ])
+}
+
+/// Texte sur plusieurs lignes, coupé à la largeur donnée.
+private struct TextBlock {
+    let framesetter: CTFramesetter
+    let width: CGFloat
+    let height: CGFloat
+
+    init(_ string: NSAttributedString, width: CGFloat) {
+        framesetter = CTFramesetterCreateWithAttributedString(string)
+        self.width = width
+        let fit = CTFramesetterSuggestFrameSizeWithConstraints(
+            framesetter, CFRange(location: 0, length: 0), nil,
+            CGSize(width: width, height: .greatestFiniteMagnitude), nil)
+        height = string.length == 0 ? 0 : ceil(fit.height) + 2
+    }
+
+    /// `top` : ordonnée du bord supérieur (repère CoreGraphics, origine en bas).
+    func draw(_ ctx: CGContext, x: CGFloat, top: CGFloat) {
+        guard height > 0 else { return }
+        let path = CGPath(rect: CGRect(x: x, y: top - height, width: width, height: height), transform: nil)
+        let frame = CTFramesetterCreateFrame(framesetter, CFRange(location: 0, length: 0), path, nil)
+        CTFrameDraw(frame, ctx)
+    }
 }
 
 private struct TextLine {

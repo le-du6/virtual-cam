@@ -15,6 +15,10 @@ struct OverlaysView: View {
                 .onMove { store.move(from: $0, to: $1) }
             }
             .safeAreaInset(edge: .bottom) {
+                VStack(spacing: 0) {
+                Divider()
+                RotationPanel()
+                Divider()
                 HStack(spacing: 4) {
                     Menu {
                         ForEach(OverlayStyle.allCases) { style in
@@ -39,10 +43,12 @@ struct OverlaysView: View {
 
                     Spacer()
                     Button("Tout masquer") { store.hideAll() }
-                        .disabled(store.visible.isEmpty)
+                        .disabled(store.visible.isEmpty && !store.rotationRunning)
                 }
                 .buttonStyle(.borderless)
                 .padding(8)
+                }
+                .background(.bar)
             }
             .navigationSplitViewColumnWidth(min: 230, ideal: 260)
         } detail: {
@@ -66,6 +72,32 @@ struct OverlaysView: View {
     }
 }
 
+/// Réglages et commande de la rotation automatique.
+private struct RotationPanel: View {
+    @EnvironmentObject private var store: OverlayStore
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Label("Rotation", systemImage: "arrow.triangle.2.circlepath").font(.headline)
+                Spacer()
+                Button(store.rotationRunning ? "Arrêter" : "Lancer") { store.toggleRotation() }
+                    .disabled(!store.rotationRunning && store.rotationItems.isEmpty)
+            }
+            Text("\(store.rotationItems.count) bandeau(x) inclus · ⌃⌥R")
+                .font(.caption).foregroundStyle(.secondary)
+            Stepper("Durée par défaut : \(Int(store.rotation.duration)) s",
+                    value: $store.rotation.duration, in: 3...120, step: 1)
+                .help("Pour les bandeaux sans masquage automatique ; sinon leur propre durée")
+            Stepper("Pause entre bandeaux : \(Int(store.rotation.pause)) s",
+                    value: $store.rotation.pause, in: 0...60, step: 1)
+            Toggle("En boucle", isOn: $store.rotation.loop)
+        }
+        .controlSize(.small)
+        .padding(10)
+    }
+}
+
 private struct OverlayRow: View {
     let item: OverlayItem
     let index: Int
@@ -81,6 +113,12 @@ private struct OverlayRow: View {
                 Text(item.style.label).font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
+            if item.inRotation {
+                Image(systemName: "arrow.triangle.2.circlepath")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .help("Dans la rotation")
+            }
             if index < 9 {
                 Text("⌃⌥\(index + 1)").font(.caption.monospaced()).foregroundStyle(.secondary)
             }
@@ -121,6 +159,7 @@ private struct OverlayEditor: View {
                 Picker("Animation", selection: Binding(get: { item.animation }, set: { item.animation = $0 })) {
                     ForEach(OverlayAnimation.allCases) { Text($0.label).tag($0) }
                 }
+                Toggle("Inclure dans la rotation", isOn: $item.inRotation)
                 LabeledContent("Masquage automatique") {
                     HStack {
                         Slider(value: $item.autoHide, in: 0...60, step: 1)
@@ -128,6 +167,18 @@ private struct OverlayEditor: View {
                             .monospacedDigit()
                             .frame(width: 52, alignment: .trailing)
                     }
+                }
+            }
+
+            Section("Logo") {
+                TextField("Logo", text: $item.logo, prompt: Text("fichier du dossier Logos ou URL https"))
+                Toggle("Logo en blanc (fonds sombres)", isOn: $item.logoWhite)
+                HStack {
+                    Text("Un logo à fond transparent (PNG ou SVG) rend le mieux, surtout en blanc.")
+                        .font(.caption).foregroundStyle(.secondary)
+                    Spacer()
+                    Button("Recharger") { Logos.reload() }
+                    Button("Dossier Logos") { Logos.revealFolder() }
                 }
             }
 

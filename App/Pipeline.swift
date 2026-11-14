@@ -1,5 +1,6 @@
 import AppKit
 import AVFoundation
+import QuartzCore
 
 /// Orchestration : caméra physique → compositeur → caméra virtuelle.
 /// Les réglages modifiables sont enregistrés à chaque changement.
@@ -30,10 +31,26 @@ final class Pipeline: ObservableObject {
 
     // MARK: Aperçu
 
+    /// Aperçu de l'image composée, alimenté directement par le compositeur.
+    /// (Ne repasse pas par la caméra virtuelle : les effets vidéo macOS de MaCam ne s'y appliquent donc pas.)
     @Published var previewEnabled = false {
-        didSet { previewEnabled ? startPreview() : stopPreview() }
+        didSet {
+            previewLock.lock(); previewFlag = previewEnabled; previewLock.unlock()
+            if !previewEnabled { previewLayer.contents = nil }
+        }
     }
-    let previewSession = AVCaptureSession()
+    let previewLayer: CALayer = {
+        let layer = CALayer()
+        layer.contentsGravity = .resizeAspect
+        layer.backgroundColor = NSColor.black.cgColor
+        return layer
+    }()
+    private let previewLock = NSLock()
+    private var previewFlag = false
+
+    /// Effet Portrait de macOS actif sur la caméra physique (appliqué avant les bandeaux).
+    @Published private(set) var portraitActive = false
+    private var currentDevice: AVCaptureDevice?
 
     // MARK: Chaîne vidéo
 
@@ -56,8 +73,10 @@ final class Pipeline: ObservableObject {
         guard timer == nil else { return }
 
         let compositor = self.compositor, sink = self.sink
-        capture.onFrame = { pixelBuffer in
-            if let frame = compositor.render(camera: pixelBuffer) { sink.send(frame) }
+        capture.onFrame = { [weak self] pixelBuffer in
+            guard let frame = compositor.render(camera: pixelBuffer) else { return }
+            sink.send(frame)
+            self?.updatePreview(frame)
         }
 
         refreshCameras()
@@ -89,7 +108,25 @@ final class Pipeline: ObservableObject {
         reconnectIfNeeded()
     }
 
+    private func updatePreview(_ frame: CVPixelBuffer) {
+        previewLock.lock(); let enabled = previewFlag; previewLock.unlock()
+        guard enabled, let surface = CVPixelBufferGetIOSurface(frame)?.takeUnretainedValue() else { return }
+        DispatchQueue.main.async { [previewLayer] in
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            previewLayer.contents = surface
+            CATransaction.commit()
+        }
+    }
+
+    /// Ouvre le panneau « Effets vidéo » de macOS (Portrait, Studio Light…) pour MaCam.
+    func showVideoEffects() {
+        AVCaptureDevice.showSystemUserInterface(.videoEffects)
+    }
+
     private func reconnectIfNeeded() {
+        let portrait = currentDevice?.isPortraitEffectActive ?? false
+        if portraitActive != portrait { portraitActive = portrait }
         if !sink.isConnected { sink.connect() }
         let connected = sink.isConnected
         if sinkConnected != connected { sinkConnected = connected }
@@ -130,6 +167,7 @@ final class Pipeline: ObservableObject {
                 }
                 do {
                     try self.capture.start(device: device)
+                    self.currentDevice = device
                     self.isRunning = true
                     self.message = nil
                     if self.activity == nil {   // évite l'App Nap pendant une visio
@@ -150,30 +188,5 @@ final class Pipeline: ObservableObject {
             ProcessInfo.processInfo.endActivity(activity)
             self.activity = nil
         }
-    }
-
-    // MARK: Aperçu de la sortie réelle (lit la caméra virtuelle comme le ferait Teams)
-
-    private func startPreview() {
-        guard let device = AVCaptureDevice.DiscoverySession(deviceTypes: [.external], mediaType: .video,
-                                                            position: .unspecified)
-                .devices.first(where: { $0.localizedName == CamConfig.deviceName }),
-              let input = try? AVCaptureDeviceInput(device: device)
-        else {
-            message = "Caméra virtuelle introuvable : l'extension est-elle active ?"
-            DispatchQueue.main.async { self.previewEnabled = false }
-            return
-        }
-        let session = previewSession
-        session.beginConfiguration()
-        session.inputs.forEach(session.removeInput)
-        if session.canAddInput(input) { session.addInput(input) }
-        session.commitConfiguration()
-        DispatchQueue.global(qos: .userInitiated).async { session.startRunning() }
-    }
-
-    private func stopPreview() {
-        let session = previewSession
-        DispatchQueue.global(qos: .userInitiated).async { if session.isRunning { session.stopRunning() } }
     }
 }

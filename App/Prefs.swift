@@ -4,6 +4,8 @@ import Foundation
 enum Prefs {
     static let preferredCamera = "preferredCameraID"
     static let overlays = "overlays"
+    static let rotation = "rotation"
+    static let logosMigrated = "logosMigrated"
     static let autoStart = "autoStart"
     static let showDockIcon = "showDockIcon"
 }

@@ -50,7 +50,13 @@ struct MenuBarContent: View {
         }
         Button("Tout masquer") { overlays.hideAll() }
             .keyboardShortcut("0", modifiers: [.control, .option])
-            .disabled(overlays.visible.isEmpty)
+            .disabled(overlays.visible.isEmpty && !overlays.rotationRunning)
+
+        Button(overlays.rotationRunning
+               ? "Arrêter la rotation"
+               : "Lancer la rotation (\(overlays.rotationItems.count) bandeaux)") { overlays.toggleRotation() }
+            .keyboardShortcut("r", modifiers: [.control, .option])
+            .disabled(!overlays.rotationRunning && overlays.rotationItems.isEmpty)
 
         Divider()
 

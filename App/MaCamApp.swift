@@ -67,10 +67,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ext.activate()          // installe ou met à jour l'extension à chaque lancement
         pipeline.bootstrap()    // démarre la caméra si « Démarrer au lancement » est coché
 
-        // ⌃⌥1…9 : afficher / masquer le bandeau n ; ⌃⌥0 : tout masquer
+        // ⌃⌥1…9 : afficher / masquer le bandeau n ; ⌃⌥0 : tout masquer ; ⌃⌥R : rotation
         hotKeys = HotKeys { [weak overlays] number in
             guard let overlays else { return }
-            number == 0 ? overlays.hideAll() : overlays.toggle(index: number - 1)
+            switch number {
+            case 0: overlays.hideAll()
+            case HotKeys.rotation: overlays.toggleRotation()
+            default: overlays.toggle(index: number - 1)
+            }
         }
     }
 
