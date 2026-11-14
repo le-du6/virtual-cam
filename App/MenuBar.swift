@@ -15,6 +15,7 @@ struct MenuBarContent: View {
     @EnvironmentObject private var ext: ExtensionManager
     @EnvironmentObject private var pipeline: Pipeline
     @EnvironmentObject private var app: AppState
+    @EnvironmentObject private var overlays: OverlayStore
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
@@ -35,11 +36,26 @@ struct MenuBarContent: View {
             }
         }
 
-        Toggle("Afficher le bandeau", isOn: $pipeline.showLowerThird)
+        Divider()
+
+        // Bandeaux : coche = affiché ; raccourcis globaux ⌃⌥1…9, ⌃⌥0 pour tout masquer
+        ForEach(Array(overlays.items.enumerated()), id: \.element.id) { index, item in
+            let toggle = Toggle(item.label, isOn: Binding(get: { overlays.isVisible(item) },
+                                                          set: { _ in overlays.toggle(item) }))
+            if index < 9 {
+                toggle.keyboardShortcut(KeyEquivalent(Character(String(index + 1))), modifiers: [.control, .option])
+            } else {
+                toggle
+            }
+        }
+        Button("Tout masquer") { overlays.hideAll() }
+            .keyboardShortcut("0", modifiers: [.control, .option])
+            .disabled(overlays.visible.isEmpty)
 
         Divider()
 
-        Button("Ouvrir MaCam…") { app.showMainWindow(openWindow) }
+        Button("Gérer les bandeaux…") { app.showWindow(MaCamApp.overlaysWindowID, using: openWindow) }
+        Button("Ouvrir MaCam…") { app.showWindow(MaCamApp.mainWindowID, using: openWindow) }
             .keyboardShortcut(",")
 
         Menu("Réglages") {

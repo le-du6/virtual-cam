@@ -5,6 +5,8 @@ struct ContentView: View {
     @EnvironmentObject private var ext: ExtensionManager
     @EnvironmentObject private var pipeline: Pipeline
     @EnvironmentObject private var app: AppState
+    @EnvironmentObject private var overlays: OverlayStore
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         Form {
@@ -39,10 +41,25 @@ struct ContentView: View {
                 }
             }
 
-            Section("Bandeau de test") {
-                Toggle("Afficher le bandeau", isOn: $pipeline.showLowerThird)
-                TextField("Nom", text: $pipeline.lowerThirdName)
-                TextField("Fonction", text: $pipeline.lowerThirdTitle)
+            Section("Bandeaux") {
+                ForEach(Array(overlays.items.enumerated()), id: \.element.id) { index, item in
+                    Toggle(isOn: Binding(get: { overlays.isVisible(item) }, set: { _ in overlays.toggle(item) })) {
+                        HStack {
+                            Text(item.label)
+                            Text(item.style.label).font(.caption).foregroundStyle(.secondary)
+                            Spacer()
+                            if index < 9 {
+                                Text("⌃⌥\(index + 1)").font(.caption.monospaced()).foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+                HStack {
+                    Button("Gérer les bandeaux…") { app.showWindow(MaCamApp.overlaysWindowID, using: openWindow) }
+                    Spacer()
+                    Button("Tout masquer") { overlays.hideAll() }
+                        .disabled(overlays.visible.isEmpty)
+                }
             }
 
             Section {

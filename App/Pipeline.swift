@@ -18,15 +18,6 @@ final class Pipeline: ObservableObject {
 
     // MARK: Réglages enregistrés
 
-    @Published var showLowerThird: Bool {
-        didSet { defaults.set(showLowerThird, forKey: Prefs.showLowerThird); updateOverlay() }
-    }
-    @Published var lowerThirdName: String {
-        didSet { defaults.set(lowerThirdName, forKey: Prefs.lowerThirdName); updateOverlay() }
-    }
-    @Published var lowerThirdTitle: String {
-        didSet { defaults.set(lowerThirdTitle, forKey: Prefs.lowerThirdTitle); updateOverlay() }
-    }
     @Published var autoStart: Bool {
         didSet { defaults.set(autoStart, forKey: Prefs.autoStart) }
     }
@@ -48,18 +39,15 @@ final class Pipeline: ObservableObject {
 
     private let defaults: UserDefaults
     private let capture = CameraCapture()
-    private let compositor = Compositor()
+    private let compositor: Compositor
     private let sink = SinkFeeder()
     private var timer: Timer?
     private var activity: NSObjectProtocol?
     private var observers: [NSObjectProtocol] = []
 
-    init(defaults: UserDefaults = .standard) {
+    init(overlays: OverlayEngine, defaults: UserDefaults = .standard) {
         self.defaults = defaults
-        _showLowerThird = Published(initialValue: defaults.bool(forKey: Prefs.showLowerThird, default: true))
-        _lowerThirdName = Published(initialValue: defaults.string(forKey: Prefs.lowerThirdName) ?? "Benoit LEGER")
-        _lowerThirdTitle = Published(initialValue: defaults.string(forKey: Prefs.lowerThirdTitle)
-                                     ?? "Directeur Conseil Sécurité · Stelau")
+        compositor = Compositor(overlays: overlays)
         _autoStart = Published(initialValue: defaults.bool(forKey: Prefs.autoStart, default: false))
         preferredCameraID = defaults.string(forKey: Prefs.preferredCamera)
     }
@@ -73,7 +61,6 @@ final class Pipeline: ObservableObject {
         }
 
         refreshCameras()
-        updateOverlay()
 
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             self?.reconnectIfNeeded()
@@ -163,12 +150,6 @@ final class Pipeline: ObservableObject {
             ProcessInfo.processInfo.endActivity(activity)
             self.activity = nil
         }
-    }
-
-    // MARK: Calques
-
-    private func updateOverlay() {
-        compositor.setOverlay(showLowerThird ? LowerThird.render(name: lowerThirdName, title: lowerThirdTitle) : nil)
     }
 
     // MARK: Aperçu de la sortie réelle (lit la caméra virtuelle comme le ferait Teams)

@@ -1,18 +1,19 @@
 import CoreImage
 import CoreVideo
+import QuartzCore
 
-/// Assemble l'image finale : caméra recadrée en 16:9 + calques (bandeau, etc.).
-/// C'est ici qu'on branchera les masques animés et les sources ScreenCaptureKit.
+/// Assemble l'image finale : caméra recadrée en 16:9 + bandeaux animés.
+/// Point d'entrée prévu pour les futures sources ScreenCaptureKit.
 final class Compositor {
     private let size = CGSize(width: CamConfig.width, height: CamConfig.height)
     private let context = CIContext(options: [.cacheIntermediates: false])   // Metal par défaut
     private let colorSpace = CGColorSpace(name: CGColorSpace.sRGB)!
     private var pool: CVPixelBufferPool?
 
-    private let lock = NSLock()
-    private var overlay: CIImage?
+    private let overlays: OverlayEngine
 
-    init() {
+    init(overlays: OverlayEngine) {
+        self.overlays = overlays
         let attrs: [CFString: Any] = [
             kCVPixelBufferWidthKey: CamConfig.width,
             kCVPixelBufferHeightKey: CamConfig.height,
@@ -20,10 +21,6 @@ final class Compositor {
             kCVPixelBufferIOSurfacePropertiesKey: [:] as CFDictionary   // indispensable pour passer à l'extension
         ]
         CVPixelBufferPoolCreate(kCFAllocatorDefault, nil, attrs as CFDictionary, &pool)
-    }
-
-    func setOverlay(_ image: CIImage?) {
-        lock.lock(); overlay = image; lock.unlock()
     }
 
     func render(camera pixelBuffer: CVPixelBuffer) -> CVPixelBuffer? {
@@ -39,8 +36,7 @@ final class Compositor {
             y: (size.height - image.extent.height) / 2 - image.extent.minY))
         image = image.cropped(to: frame)
 
-        lock.lock(); let overlay = self.overlay; lock.unlock()
-        if let overlay { image = overlay.composited(over: image) }
+        if let overlay = overlays.frame(at: CACurrentMediaTime()) { image = overlay.composited(over: image) }
 
         var output: CVPixelBuffer?
         guard CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, pool, &output) == kCVReturnSuccess,

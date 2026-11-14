@@ -28,8 +28,8 @@ final class AppState: ObservableObject {
         NSApp.activate()
     }
 
-    func showMainWindow(_ openWindow: OpenWindowAction) {
-        openWindow(id: MaCamApp.mainWindowID)
+    func showWindow(_ id: String, using openWindow: OpenWindowAction) {
+        openWindow(id: id)
         NSApp.activate()
     }
 

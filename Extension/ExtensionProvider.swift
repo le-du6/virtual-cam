@@ -3,7 +3,7 @@
 // Un périphérique « MaCam » avec deux flux :
 //  - source : lu par Teams, Zoom, FaceTime… (émis ici à cadence fixe)
 //  - sink   : alimenté par l'app MaCam avec les images déjà composées
-// Sans image récente de l'app, l'extension émet une mire d'attente.
+// Sans image récente de l'app, l'extension émet la mire « Stelau revient vite… » (Placeholder.swift).
 
 import Foundation
 import CoreGraphics
@@ -67,7 +67,7 @@ final class DeviceSource: NSObject, CMIOExtensionDeviceSource {
     private var sinkStream: SinkStream!
 
     private let frameDuration = CMTime(value: 1, timescale: CMTimeScale(CamConfig.frameRate))
-    private var placeholder: CVPixelBuffer?
+    private var placeholders: [CVPixelBuffer] = []
 
     // Émission vers les clients (Teams, Zoom…)
     private let timerQueue = DispatchQueue(label: "macam.output", qos: .userInteractive)
@@ -106,7 +106,7 @@ final class DeviceSource: NSObject, CMIOExtensionDeviceSource {
         } catch {
             fatalError("Impossible d'ajouter les flux : \(error)")
         }
-        placeholder = Self.makePlaceholder()
+        placeholders = Placeholder.makeFrames()
     }
 
     var availableProperties: Set<CMIOExtensionProperty> { [.deviceTransportType, .deviceModel] }
@@ -153,6 +153,8 @@ final class DeviceSource: NSObject, CMIOExtensionDeviceSource {
         let fresh = (lastFrame != nil && nowNs &- lastFrameNs < kStaleFrameNs) ? lastFrame : nil
         lock.unlock()
 
+        // Mire d'attente : deux images alternées toutes les 0,5 s (curseur clignotant)
+        let placeholder = placeholders.isEmpty ? nil : placeholders[Int(now.seconds * 2) % placeholders.count]
         guard let pixelBuffer = fresh ?? placeholder else { return }
 
         var formatDescription: CMFormatDescription?
@@ -211,46 +213,6 @@ final class DeviceSource: NSObject, CMIOExtensionDeviceSource {
         }
     }
 
-    // MARK: Mire d'attente
-
-    private static func makePlaceholder() -> CVPixelBuffer? {
-        let attrs: [CFString: Any] = [
-            kCVPixelBufferIOSurfacePropertiesKey: [:] as CFDictionary,
-            kCVPixelBufferCGBitmapContextCompatibilityKey: true
-        ]
-        var pb: CVPixelBuffer?
-        guard CVPixelBufferCreate(kCFAllocatorDefault, CamConfig.width, CamConfig.height,
-                                  kCVPixelFormatType_32BGRA, attrs as CFDictionary, &pb) == kCVReturnSuccess,
-              let pb else { return nil }
-
-        CVPixelBufferLockBaseAddress(pb, [])
-        defer { CVPixelBufferUnlockBaseAddress(pb, []) }
-
-        guard let ctx = CGContext(data: CVPixelBufferGetBaseAddress(pb),
-                                  width: CamConfig.width, height: CamConfig.height,
-                                  bitsPerComponent: 8, bytesPerRow: CVPixelBufferGetBytesPerRow(pb),
-                                  space: CGColorSpace(name: CGColorSpace.sRGB)!,
-                                  bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue
-                                            | CGBitmapInfo.byteOrder32Little.rawValue)
-        else { return pb }
-
-        ctx.setFillColor(CGColor(srgbRed: 0.09, green: 0.11, blue: 0.15, alpha: 1))
-        ctx.fill(CGRect(x: 0, y: 0, width: CamConfig.width, height: CamConfig.height))
-
-        let font = CTFontCreateUIFontForLanguage(.system, 34, nil)
-            ?? CTFontCreateWithName("Helvetica" as CFString, 34, nil)
-        let attributes: [NSAttributedString.Key: Any] = [
-            NSAttributedString.Key(kCTFontAttributeName as String): font,
-            NSAttributedString.Key(kCTForegroundColorAttributeName as String): CGColor(gray: 0.8, alpha: 1)
-        ]
-        let line = CTLineCreateWithAttributedString(
-            NSAttributedString(string: "MaCam — en attente de l’application", attributes: attributes))
-        let bounds = CTLineGetBoundsWithOptions(line, [])
-        ctx.textPosition = CGPoint(x: (CGFloat(CamConfig.width) - bounds.width) / 2,
-                                   y: (CGFloat(CamConfig.height) - bounds.height) / 2)
-        CTLineDraw(line, ctx)
-        return pb
-    }
 }
 
 // MARK: - Stream source (lu par Teams & co.)

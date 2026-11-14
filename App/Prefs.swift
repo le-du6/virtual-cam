@@ -3,9 +3,7 @@ import Foundation
 /// Clés des réglages enregistrés automatiquement (UserDefaults, domaine fr.stelau.macam).
 enum Prefs {
     static let preferredCamera = "preferredCameraID"
-    static let showLowerThird = "showLowerThird"
-    static let lowerThirdName = "lowerThirdName"
-    static let lowerThirdTitle = "lowerThirdTitle"
+    static let overlays = "overlays"
     static let autoStart = "autoStart"
     static let showDockIcon = "showDockIcon"
 }

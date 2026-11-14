@@ -1,6 +1,6 @@
-# MaCam — v0.2
+# MaCam — v0.3
 
-Caméra virtuelle macOS (Teams, Zoom, Meet, FaceTime…) alimentée par une petite app Swift qui compose l'image : webcam + bandeau. Pilotable depuis la barre des menus.
+Caméra virtuelle macOS (Teams, Zoom, Meet, FaceTime…) alimentée par une petite app Swift qui compose l'image : webcam + bandeaux animés (nom, fonction, cartes QR code). Pilotable depuis la barre des menus et au clavier.
 
 ```
 Webcam ──► App MaCam ──► Compositor (Core Image / Metal) ──► sink ─┐
@@ -27,11 +27,21 @@ Au premier lancement de MaCam, autorisez la nouvelle extension dans **Réglages 
 
 ## Utilisation
 
-- **Barre des menus** (icône caméra) : démarrer ou arrêter, choisir la source, afficher le bandeau, ouvrir la fenêtre, réglages, quitter.
+- **Barre des menus** (icône caméra) : démarrer ou arrêter, choisir la source, afficher / masquer les bandeaux, ouvrir les fenêtres, réglages, quitter.
 - **Fenêtre** (*Ouvrir MaCam…* ou ⌘,) : tous les réglages, aperçu de la sortie réelle.
-- **Réglages enregistrés automatiquement** : caméra préférée (reprise dès qu'elle est rebranchée), bandeau (affichage, nom, fonction), démarrage de la caméra au lancement, lancement à l'ouverture de session, icône dans le Dock.
+- **Réglages enregistrés automatiquement** : caméra préférée (reprise dès qu'elle est rebranchée), bandeaux, démarrage de la caméra au lancement, lancement à l'ouverture de session, icône dans le Dock.
 - Fermer la fenêtre ne quitte pas MaCam. Pour quitter : *Quitter MaCam* dans le menu.
 - Icône du Dock masquée : MaCam démarre sans fenêtre, uniquement dans la barre des menus.
+
+## Bandeaux
+
+- **Styles** : *Sobre* (bandeau d'origine), *Marqué* (bleu nuit / turquoise / orange, deux étages), *Carte QR code* (titre + icône duotone, description, URL et QR code).
+- **Animations** : *Déroulé* (accent, puis fond, puis texte), *Glissement*, *Fondu* ; la sortie rejoue l'entrée à l'envers.
+- **Zones** : un bandeau à la fois en haut et un en bas ; en afficher un autre dans la même zone remplace le précédent.
+- **Masquage automatique** réglable par bandeau (0 = reste affiché).
+- **Pilotage** : menu de la barre des menus, fenêtre principale, et raccourcis globaux **⌃⌥1 … ⌃⌥9** (ordre de la liste), **⌃⌥0** pour tout masquer — utilisables pendant que Teams est au premier plan.
+- **Édition** : *Gérer les bandeaux…* — liste réordonnable, aperçu, ajout / duplication / suppression. Tout est enregistré automatiquement.
+- **Icônes des cartes** : un symbole SF (rendu duotone « hiérarchique »), ou un SVG Font Awesome Duotone de votre abonnement déposé dans le *Dossier Icônes* (`~/Library/Application Support/MaCam/Icons`) : `flask.svg` → icône `flask`. Il est recoloré automatiquement, couche secondaire à 40 %.
 
 ## Dépannage
 
@@ -60,5 +70,11 @@ defaults read fr.stelau.macam          # réglages enregistrés
 | `App/Prefs.swift` | Clés des réglages (UserDefaults) |
 | `App/SinkFeeder.swift` | Liaison vers le sink (API C CoreMediaIO) |
 | `App/CameraCapture.swift` | Capture de la webcam physique |
-| `App/Compositor.swift` | Composition 1280×720 : **point d'extension pour les masques** |
-| `App/LowerThird.swift` | Bandeau de test, statique |
+| `App/Compositor.swift` | Composition 1280×720 : caméra + bandeaux |
+| `App/Overlays/OverlayModel.swift` | Bandeaux : modèle, styles, positions, jeu de départ |
+| `App/Overlays/OverlayRenderer.swift` | Dessin des styles (calques séparés), QR code, aperçu |
+| `App/Overlays/OverlayEngine.swift` | Animations image par image, placement |
+| `App/Overlays/OverlayStore.swift` | Liste enregistrée, affichage par zone, masquage auto |
+| `App/Overlays/OverlaysView.swift` | Fenêtre « Bandeaux » (éditeur) |
+| `App/Overlays/HotKeys.swift` | Raccourcis globaux ⌃⌥0…9 |
+| `App/Overlays/Icons.swift` | Icônes : dossier Icônes (SVG FA Duotone) ou symboles SF |
